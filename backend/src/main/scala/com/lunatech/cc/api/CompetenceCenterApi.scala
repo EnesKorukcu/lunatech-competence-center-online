@@ -1,6 +1,7 @@
 package com.lunatech.cc.api
 
-import com.lunatech.cc.api.services.{ PeopleService, ApiPeopleService, WorkshopService, EventBriteWorkshopService }
+import com.lunatech.cc.api.CompetenceCenterApi.passportController
+import com.lunatech.cc.api.services._
 import com.lunatech.cc.formatter.PdfCVFormatter
 import com.lunatech.cc.utils.DBMigration
 import com.twitter.finagle.http.filter.Cors
@@ -14,6 +15,7 @@ import io.finch.circe._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory._
 import pureconfig._
+
 import scalaz._
 
 object CompetenceCenterApi extends App {
@@ -32,15 +34,18 @@ object CompetenceCenterApi extends App {
 
   lazy val logger: Logger = getLogger(getClass)
 
-  val transactor = DriverManagerTransactor[Task](
+  val createTransactor = (config: Config) =>  DriverManagerTransactor[Task](
     driver = config.database.driver,
     url = config.database.url,
     user = config.database.user,
     pass = config.database.password)
 
+  val transactor = createTransactor(config)
+
   new DBMigration(config.database).migrate()
 
   val cvService = new PostgresCVService(transactor)
+  val passportService = new PostgresPassportService(transactor)
   val workshopService = EventBriteWorkshopService(config.services.workshops)
   val peopleService = ApiPeopleService(config.services.people)
 
@@ -67,11 +72,15 @@ object CompetenceCenterApi extends App {
   val cvController = new CVController(cvService, peopleService, cvFormatter, authenticated, authenticatedUser)
   val workshopController = new WorkshopController(workshopService, authenticated)
   val peopleController = new PeopleController(peopleService, authenticatedUser)
+  val passportController = new PassportController(passportService ,peopleService, authenticatedUser)
   val service = (
-    cvController.`GET /employees` :+:
-    cvController.`GET /employees/me` :+:
-    cvController.`GET /employees/employeeId` :+:
-    cvController.`PUT /employees/me` :+:
+    passportController.`PUT /passport` :+:
+      passportController.`GET /passport/me` :+:
+      passportController.`GET /passport/employeeId` :+:
+//    cvController.`GET /employees` :+:
+//    cvController.`GET /employees/me` :+:
+//    cvController.`GET /employees/employeeId` :+:
+//    cvController.`PUT /employees/me` :+:
     cvController.`POST /cvs` :+:
     cvController.`GET /cvs` :+:
     cvController.`GET /cvs/employeeId` :+:
